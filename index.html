@@ -133,10 +133,11 @@
                 this.mismatchSound = new Tone.NoiseSynth({
                     envelope: { attack: 0.005, decay: 0.1, sustain: 0, release: 0.05 }
                 }).toDestination();
-                this.victorySynth = new Tone.Synth({
-                    oscillator: { type: 'triangle' },
-                    envelope: { attack: 0.1, decay: 0.5, sustain: 0.4, release: 1 }
-                }).toDestination();
+                this.victorySynth = new Tone.PluckSynth({
+				attackNoise: 1.5,
+				dampening: 2000,
+    			resonance: 0.7
+				}).toDestination();
 
                 // Listeners
                 this.restartButton.addEventListener('click', () => this.startGame());
@@ -258,17 +259,22 @@
             }
 
             checkVictory() {
-                if (this.matchedPairs === this.icons.length) {
-                    this.stopTimer(); // Detener el temporizador
+    if (this.matchedPairs === this.icons.length) {
+        this.stopTimer(); // Detener el temporizador
 
-                    // Jingle de Victoria
-                    this.victorySynth.triggerAttackRelease(['C5', 'E5', 'G5'], '1'); 
+        // 🏆 JINGLE DE VICTORIA: Un acorde rápido y breve (C4, E4, G4)
+        const now = Tone.now();
+        const duration = '16n'; // Duración muy corta
 
-                    // Mostrar el resultado con el tiempo
-                    this.finalMovesDisplay.textContent = `¡Lo lograste en ${this.moves} movimientos y ${this.timer} segundos!`;
-                    this.victoryMessage.classList.remove('hidden');
-                }
-            }
+        this.victorySynth.triggerAttackRelease('C4', duration, now);
+        this.victorySynth.triggerAttackRelease('E4', duration, now + 0.1); // 0.1s después
+        this.victorySynth.triggerAttackRelease('G4', duration, now + 0.2); // 0.2s después
+
+        // Mostrar el resultado con el tiempo
+        this.finalMovesDisplay.textContent = `¡Lo lograste en ${this.moves} movimientos y ${this.timer} segundos!`;
+        this.victoryMessage.classList.remove('hidden');
+    }
+}
 
             startGame() {
                 this.moves = 0;
