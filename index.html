@@ -1,0 +1,301 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Juego de Memoria</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/tone@14.8.49/build/Tone.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;700&display=swap" rel="stylesheet">
+    
+    <style>
+        body {
+            font-family: 'Roboto', sans-serif;
+            background-color: #1f2937; /* Gris oscuro */
+            color: #f3f4f6; /* Gris claro */
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+        }
+        .card {
+            width: 100%;
+            height: 100%;
+            /* Corrección: La perspectiva debe estar en el contenedor para el efecto 3D */
+            perspective: 1000px;
+            cursor: pointer;
+        }
+        .card-inner {
+            position: relative;
+            width: 100%;
+            height: 100%;
+            text-align: center;
+            transition: transform 0.6s;
+            /* Corrección: Esencial para la rotación 3D */
+            transform-style: preserve-3d;
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
+        }
+        /* Estado de volteada: Gira el contenedor interno para mostrar el anverso */
+        .flipped .card-inner {
+            transform: rotateY(180deg);
+        }
+        .card-face {
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            /* Corrección: Oculta la cara posterior al girar */
+            backface-visibility: hidden; 
+            border-radius: 8px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 2.5rem;
+            font-weight: bold;
+        }
+        .card-back {
+            background-color: #3b82f6; /* Azul */
+            border: 3px solid #60a5fa;
+            /* El dorso se muestra por defecto (sin rotación) */
+            transform: rotateY(0deg); 
+        }
+        .card-front {
+            background-color: #9ca3af; /* Gris */
+            border: 3px solid #4b5563;
+            /* El anverso está rotado 180deg para quedar detrás */
+            transform: rotateY(180deg); 
+        }
+        /* Estilo para cartas emparejadas */
+        .matched .card-front, .matched .card-back {
+            pointer-events: none; /* Desactivar clics */
+            background-color: #10b981; /* Verde */
+            border: 3px solid #059669;
+        }
+    </style>
+</head>
+<body>
+
+    <div class="max-w-4xl w-full bg-gray-800 p-8 rounded-xl shadow-2xl">
+        <h1 class="text-4xl font-bold text-center mb-6 text-yellow-400">🧠 Juego de Memoria 🃏</h1>
+        
+        <div class="flex justify-between items-center mb-6 p-4 bg-gray-700 rounded-lg">
+            <div id="moves" class="text-xl font-semibold">Movimientos: 0</div>
+            <div id="gameTimer" class="text-xl font-semibold text-yellow-300">Tiempo: 0s</div>
+            <button id="restartButton" class="bg-red-600 hover:bg-red-700 text-white font-bold py-2 px-4 rounded-full transition duration-300">
+                Reiniciar Juego
+            </button>
+        </div>
+
+        <div id="gameBoard" class="grid grid-cols-4 gap-4 w-full aspect-square max-w-lg mx-auto">
+        </div>
+
+        <div id="victoryMessage" class="hidden fixed inset-0 bg-black bg-opacity-70 flex flex-col items-center justify-center z-50">
+            <div class="bg-gray-700 p-8 rounded-lg shadow-xl text-center">
+                <h2 class="text-5xl font-extrabold text-yellow-400 mb-4">¡VICTORIA! 🎉</h2>
+                <p id="finalMoves" class="text-2xl text-gray-200 mb-6">Lo lograste en X movimientos.</p>
+                <button id="playAgainButton" class="bg-green-600 hover:bg-green-700 text-white font-bold py-3 px-6 rounded-full text-xl transition duration-300">
+                    Jugar de Nuevo
+                </button>
+            </div>
+        </div>
+
+    </div>
+
+    <script>
+        class MemoryGame {
+            constructor() {
+                // Referencias a elementos del DOM
+                this.board = document.getElementById('gameBoard');
+                this.movesDisplay = document.getElementById('moves');
+                this.timerDisplay = document.getElementById('gameTimer'); 
+                this.restartButton = document.getElementById('restartButton');
+                this.victoryMessage = document.getElementById('victoryMessage');
+                this.playAgainButton = document.getElementById('playAgainButton');
+                this.finalMovesDisplay = document.getElementById('finalMoves');
+
+                // Variables de Estado
+                this.moves = 0;
+                this.matchedPairs = 0;
+                this.cardsFlipped = [];
+                this.lockBoard = false;
+                this.timer = 0;
+                this.timerInterval = null;
+
+                // Íconos para 4x4 (8 pares)
+                this.icons = [
+                    '🍕', '🍔', '🍟', '🍣', 
+                    '🌮', '🍩', '🍪', '🥤',
+                ];
+                this.totalCards = this.icons.length * 2;
+                
+                // 🎼 Inicialización de Sonidos (Tone.js)
+                this.matchSound = new Tone.Synth().toDestination();
+                this.mismatchSound = new Tone.NoiseSynth({
+                    envelope: { attack: 0.005, decay: 0.1, sustain: 0, release: 0.05 }
+                }).toDestination();
+                this.victorySynth = new Tone.Synth({
+                    oscillator: { type: 'triangle' },
+                    envelope: { attack: 0.1, decay: 0.5, sustain: 0.4, release: 1 }
+                }).toDestination();
+
+                // Listeners
+                this.restartButton.addEventListener('click', () => this.startGame());
+                this.playAgainButton.addEventListener('click', () => this.startGame());
+
+                this.startGame();
+            }
+
+            // ===============================
+            // LÓGICA DEL TEMPORIZADOR
+            // ===============================
+
+            startTimer() {
+                if (this.timerInterval) {
+                    clearInterval(this.timerInterval);
+                }
+                this.timer = 0;
+                this.timerDisplay.textContent = 'Tiempo: 0s';
+                
+                this.timerInterval = setInterval(() => {
+                    this.timer++;
+                    this.timerDisplay.textContent = `Tiempo: ${this.timer}s`;
+                }, 1000);
+            }
+
+            stopTimer() {
+                if (this.timerInterval) {
+                    clearInterval(this.timerInterval);
+                    this.timerInterval = null;
+                }
+            }
+            
+            // ===============================
+            // LÓGICA DE TABLERO Y JUEGO
+            // ===============================
+
+            shuffle(array) {
+                let currentIndex = array.length, randomIndex;
+                while (currentIndex !== 0) {
+                    randomIndex = Math.floor(Math.random() * currentIndex);
+                    currentIndex--;
+                    [array[currentIndex], array[randomIndex]] = [array[randomIndex], array[currentIndex]];
+                }
+                return array;
+            }
+
+            setupBoard() {
+                let gameIcons = [...this.icons, ...this.icons];
+                this.cards = this.shuffle(gameIcons);
+                
+                this.board.innerHTML = ''; 
+
+                this.cards.forEach((icon, index) => {
+                    const cardElement = document.createElement('div');
+                    cardElement.classList.add('card');
+                    cardElement.dataset.icon = icon;
+                    cardElement.dataset.index = index;
+
+                    cardElement.innerHTML = `
+                        <div class="card-inner">
+                            <div class="card-face card-front">${icon}</div> 
+                            <div class="card-face card-back">?</div> 
+                        </div>
+                    `;
+                    
+                    cardElement.addEventListener('click', () => this.flipCard(cardElement));
+
+                    this.board.appendChild(cardElement);
+                });
+            }
+
+            flipCard(cardElement) {
+                if (this.lockBoard) return;
+                if (cardElement.classList.contains('flipped')) return;
+                
+                cardElement.classList.add('flipped');
+                this.cardsFlipped.push(cardElement);
+
+                if (this.cardsFlipped.length === 2) {
+                    this.moves++;
+                    this.movesDisplay.textContent = `Movimientos: ${this.moves}`;
+                    this.lockBoard = true; 
+                    this.checkMatch();
+                }
+            }
+
+            checkMatch() {
+                const [cardA, cardB] = this.cardsFlipped;
+                const isMatch = cardA.dataset.icon === cardB.dataset.icon;
+
+                if (isMatch) {
+                    // Acierto y Sonido
+                    this.matchSound.triggerAttackRelease('C5', '8n'); 
+                    this.disableCards(cardA, cardB);
+                    this.matchedPairs++;
+                    this.checkVictory();
+                } else {
+                    // Error y Sonido
+                    this.mismatchSound.triggerAttackRelease('8n'); 
+                    setTimeout(() => {
+                        cardA.classList.remove('flipped');
+                        cardB.classList.remove('flipped');
+                        this.cardsFlipped = [];
+                        this.lockBoard = false;
+                    }, 1000); 
+                }
+                
+                if (isMatch) {
+                    this.cardsFlipped = [];
+                    this.lockBoard = false;
+                }
+            }
+            
+            disableCards(cardA, cardB) {
+                cardA.classList.add('matched');
+                cardB.classList.add('matched');
+                cardA.removeEventListener('click', () => this.flipCard(cardA));
+                cardB.removeEventListener('click', () => this.flipCard(cardB));
+            }
+
+            checkVictory() {
+                if (this.matchedPairs === this.icons.length) {
+                    this.stopTimer(); // Detener el temporizador
+
+                    // Jingle de Victoria
+                    this.victorySynth.triggerAttackRelease(['C5', 'E5', 'G5'], '1'); 
+
+                    // Mostrar el resultado con el tiempo
+                    this.finalMovesDisplay.textContent = `¡Lo lograste en ${this.moves} movimientos y ${this.timer} segundos!`;
+                    this.victoryMessage.classList.remove('hidden');
+                }
+            }
+
+            startGame() {
+                this.moves = 0;
+                this.matchedPairs = 0;
+                this.cardsFlipped = [];
+                this.lockBoard = false;
+                
+                this.movesDisplay.textContent = 'Movimientos: 0';
+                this.victoryMessage.classList.add('hidden');
+                
+                this.setupBoard();
+                this.startTimer(); 
+            }
+        }
+        
+        // Inicialización del juego y activación de Tone.js al primer clic
+        window.onload = () => {
+            const game = new MemoryGame(); 
+            
+            // Listener para activar el contexto de audio
+            document.documentElement.addEventListener('click', () => {
+                if (Tone.context.state !== 'running') {
+                    Tone.start();
+                }
+            }, { once: true });
+        };
+    </script>
+
+</body>
+</html>
