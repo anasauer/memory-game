@@ -183,6 +183,49 @@ footer {
   font-size: 0.9rem;
   color: #888;
 }
+	/* --- RESPONSIVE DESIGN PARA MÓVILES --- */
+@media (max-width: 650px) {
+    /* 1. Ajuste General del Contenedor: Hace que los elementos ocupen el 90% del ancho de la pantalla */
+    h1 {
+        font-size: 2rem; /* Reduce un poco el título */
+    }
+
+    .info-juego {
+        width: 90%; /* Hace que la barra de info sea flexible */
+        font-size: 1rem;
+        padding: 5px 5px; /* Reduce el padding para ahorrar espacio */
+    }
+
+    button {
+        font-size: 1rem; /* Reduce el tamaño del botón */
+        padding: 6px 15px;
+    }
+
+    /* 2. Ajuste del Tablero: Reducimos el ancho total del tablero */
+    .game-board {
+        width: 90vw; /* Ocupa el 90% del ancho del viewport (pantalla) */
+        gap: 8px; /* Reducimos el espacio entre cartas */
+        margin: 10px auto 20px auto; /* Reducimos margen inferior */
+    }
+
+    /* 3. Ajuste de las Cartas: Reducimos la altura para que quepan las 4 filas */
+    .memory-card {
+        height: 80px; /* La altura es clave. La reducimos de 140px a 80px */
+    }
+    
+    .back-face {
+        font-size: 1.5rem; /* Ajustamos el icono de brillo ✨ */
+    }
+    
+    .modal-contenido {
+        width: 80%; /* Hace que el modal se vea bien en móvil */
+        padding: 20px;
+    }
+    
+    .modal-contenido h2 {
+        font-size: 2rem;
+    }
+}
 </style>
 </head>
 
